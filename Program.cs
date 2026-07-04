@@ -13,16 +13,20 @@ namespace M5CoreInkApp
         {
             using GpioController gpio = new GpioController();
 
-            // 1. CoreInk 電源保持ピン (GPIO 12) を High 固定
+            // 1. CoreInk 電源保持ピン (GPIO 12) を最優先で High 固定
             GpioPin powerHoldPin = gpio.OpenPin(12, PinMode.Output);
             powerHoldPin.Write(PinValue.High);
             Thread.Sleep(100);
 
-            // 2. SPIピンマッピング (MOSI=23, CLK=18)
+            // 2. 起動時の暫定時間をセット（ここを現在の時刻に書き換えてビルドすれば即座に合います）
+            int currentHour = 10;
+            int currentMinute = 43;
+
+            // 3. SPIピンマッピング (MOSI=23, CLK=18)
             Configuration.SetPinFunction(23, DeviceFunction.SPI1_MOSI);
             Configuration.SetPinFunction(18, DeviceFunction.SPI1_CLOCK);
 
-            // 3. SPI設定
+            // 4. SPI設定
             var connectionSettings = new SpiConnectionSettings(1, -1)
             {
                 ClockFrequency = 4000000,
@@ -30,11 +34,11 @@ namespace M5CoreInkApp
             };
             using SpiDevice spiDevice = SpiDevice.Create(connectionSettings);
 
-            // 4. CSピン (GPIO 9) を Low 固定
+            // CSピン (GPIO 9) を Low 固定
             GpioPin csPin = gpio.OpenPin(9, PinMode.Output);
             csPin.Write(PinValue.Low);
 
-            // 5. ドライバーインスタンスの固定
+            // 5. ドライバーインスタンス生成 (一括バッファモード)
             using Gdew0154m09 screen = new Gdew0154m09(
                 spiDevice,
                 resetPin: -1,
@@ -44,7 +48,7 @@ namespace M5CoreInkApp
                 enableFramePaging: false
             );
 
-            // 7セグメントの点灯パターンテーブル (0〜9)
+            // 7セグメント配列テーブル (0〜9)
             bool[][] segments = new bool[][]
             {
                 new bool[] { true,  true,  true,  true,  true,  true,  false }, // 0
@@ -59,23 +63,21 @@ namespace M5CoreInkApp
                 new bool[] { true,  true,  true,  true,  false, true,  true  }  // 9
             };
 
-            Console.WriteLine("Clock Application Started.");
+            Console.WriteLine("Pure Isolated Clock System Started.");
 
             while (true)
             {
-                // 6. ハードウェアリセット (安定起床ウェイト 200ms)
+                // 6. ハードウェアリセット
                 using (GpioPin rstPin = gpio.OpenPin(0, PinMode.Output))
                 {
-                    rstPin.Write(PinValue.Low);
-                    Thread.Sleep(20);
-                    rstPin.Write(PinValue.High);
-                    Thread.Sleep(200);
+                    rstPin.Write(PinValue.Low); Thread.Sleep(20);
+                    rstPin.Write(PinValue.High); Thread.Sleep(200);
                 }
 
                 screen.Initialize();
                 screen.PowerOn();
 
-                // 診断コードで実績の出た「手動全面ホワイトベース構築」を展開
+                // 実績のある手動全面ホワイトベースクリア
                 for (int x = 0; x < 200; x++)
                 {
                     for (int y = 0; y < 200; y++)
@@ -84,47 +86,35 @@ namespace M5CoreInkApp
                     }
                 }
 
-                // 現在時刻を取得して桁分解
-                DateTime now = DateTime.UtcNow.AddHours(9);
+                // 桁データの展開
                 int[] digits = new int[4] {
-                    now.Hour / 10,
-                    now.Hour % 10,
-                    now.Minute / 10,
-                    now.Minute % 10
+                    currentHour / 10,
+                    currentHour % 10,
+                    currentMinute / 10,
+                    currentMinute % 10
                 };
-                Console.WriteLine($"Render Time: {digits[0]}{digits[1]}:{digits[2]}{digits[3]}");
+                Console.WriteLine($"Render Static Time: {digits[0]}{digits[1]}:{digits[2]}{digits[3]}");
 
-                // 7. 安全圏内（X: 10〜120, Y: 20〜55）へのプロット
-                int w = 16;
-                int h = 30;
-                int h2 = h / 2;
-
+                // 7. 安全圏内（X: 10〜120、Y: 20〜55）へのプロット
+                int w = 16; int h = 30; int h2 = h / 2;
                 for (int k = 0; k < 4; k++)
                 {
                     int startX = 10 + (k * 24);
-                    if (k >= 2) startX += 12; // コロン用のオフセット
+                    if (k >= 2) startX += 12;
 
                     int num = digits[k];
                     bool[] activeSeg = segments[num];
 
-                    // 各セグメントを true (黒) で上書き描画します
-                    // A (上辺)
                     if (activeSeg[0]) { for (int i = 0; i < w; i++) { screen.DrawPixel(startX + i, 20, true); screen.DrawPixel(startX + i, 21, true); } }
-                    // B (右上)
                     if (activeSeg[1]) { for (int i = 0; i < h2; i++) { screen.DrawPixel(startX + w, 20 + i, true); screen.DrawPixel(startX + w + 1, 20 + i, true); } }
-                    // C (右下)
                     if (activeSeg[2]) { for (int i = 0; i < h2; i++) { screen.DrawPixel(startX + w, 20 + h2 + i, true); screen.DrawPixel(startX + w + 1, 20 + h2 + i, true); } }
-                    // D (底辺)
                     if (activeSeg[3]) { for (int i = 0; i < w; i++) { screen.DrawPixel(startX + i, 20 + h, true); screen.DrawPixel(startX + i, 20 + h + 1, true); } }
-                    // E (左下)
                     if (activeSeg[4]) { for (int i = 0; i < h2; i++) { screen.DrawPixel(startX, 20 + h2 + i, true); screen.DrawPixel(startX + 1, 20 + h2 + i, true); } }
-                    // F (左上)
                     if (activeSeg[5]) { for (int i = 0; i < h2; i++) { screen.DrawPixel(startX, 20 + i, true); screen.DrawPixel(startX + 1, 20 + i, true); } }
-                    // G (中央)
                     if (activeSeg[6]) { for (int i = 0; i < w; i++) { screen.DrawPixel(startX + i, 20 + h2, true); screen.DrawPixel(startX + i, 20 + h2 + 1, true); } }
                 }
 
-                // コロン「:」の描画 (true = 黒)
+                // コロン「:」の描画
                 for (int i = 0; i < 3; i++)
                 {
                     for (int j = 0; j < 3; j++)
@@ -138,11 +128,26 @@ namespace M5CoreInkApp
                 screen.Flush();
                 screen.PerformFullRefresh();
 
-                // 9. パネルシャットダウン（物理的な画面描画を保持）
+                // 9. パネルシャットダウン
                 screen.PowerDown();
 
+                // ガベージコレクションを明示的に走らせる
                 nanoFramework.Runtime.Native.GC.Run(true);
+
+                // 1分間待機
                 Thread.Sleep(60000);
+
+                // 10. 自前で時間をインクリメント
+                currentMinute++;
+                if (currentMinute >= 60)
+                {
+                    currentMinute = 0;
+                    currentHour++;
+                    if (currentHour >= 24)
+                    {
+                        currentHour = 0;
+                    }
+                }
             }
         }
     }
