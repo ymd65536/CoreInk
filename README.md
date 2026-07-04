@@ -191,3 +191,9 @@ namespace M5CoreInkApp
 ## 今後の展望（TODO）
 
 * 開発環境（NuGetマネージャー等）のネットワーク構成が解決し次第、`nanoFramework.Networking.Wireless80211` パッケージを導入し、NTPによる完全自動時刻同期（JSTアジャスト版）に移行する。
+
+## 参考
+
+- [Class Jd79653A](https://docs.nanoframework.net/devices/Iot.Device.EPaper.Drivers.Jd796xx.Jd79653A.html#Iot_Device_EPaper_Drivers_Jd796xx_Jd79653A_DrawPixel_System_Int32_System_Int32_System_Boolean)
+- [Class Gdew0154m09](https://docs.nanoframework.net/devices/Iot.Device.EPaper.Drivers.Jd796xx.Gdew0154m09.html)
+- [M5CoreInk](https://docs.m5stack.com/en/core/coreink)
